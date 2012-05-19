@@ -14,19 +14,9 @@ enum
 {
     UNIFORM_MODELVIEW_MATRIX,
     UNIFORM_PROJECTION_MATRIX,
-    UNIFORM_COLOR_ARRAY,
     NUM_UNIFORMS
 };
 GLint uniforms[NUM_UNIFORMS];
-
-// Attribute index.
-enum
-{
-    ATTRIB_POSITION,
-    ATTRIB_TEXCOORD,
-    ATTRIB_INSTANCE_INDEX,
-    NUM_ATTRIBUTES
-};
 
 @protocol IPParticle <NSObject>
 

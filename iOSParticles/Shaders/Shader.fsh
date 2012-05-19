@@ -7,12 +7,11 @@
 //
 
 uniform sampler2D texture;
-uniform lowp vec4 colors[255];
 
+varying lowp vec4 vColor;
 varying mediump vec2 vTexCoord;
-varying highp float vInstanceIndex;
 
 void main()
 {
-    gl_FragColor = colors[int(floor(vInstanceIndex))] * texture2D(texture, vTexCoord);
+    gl_FragColor = vColor * texture2D(texture, vTexCoord);
 }

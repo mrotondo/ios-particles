@@ -8,21 +8,33 @@
 
 #import "IPParticleManager.h"
 
+// Attribute index.
+enum
+{
+    ATTRIB_POSITION,
+    ATTRIB_COLOR,
+    ATTRIB_TEXCOORD,
+    NUM_ATTRIBUTES
+};
+
 typedef struct _ParticleVertex {
-    GLKVector3 position;
+    GLKVector4 position;
+    GLKVector4 color;
     GLKVector2 texCoord;
-    float instanceIndex;  // :(:(:( We can't use int vertex attributes so we are passing a float and casting it in the shaders
 } ParticleVertex;
 
 @implementation IPParticleManager
 {
-    int numParticlesPerDrawCall;
     int numVerticesPerParticle;
     int numIndicesPerParticle;
-    GLuint vertexBuffer;
-    GLuint indexBuffer;
-    GLuint vertexArray;
 
+    GLKVector4 *quadVertices;
+    GLKVector2 *texCoords;
+    
+    ParticleVertex *vertices;
+    unsigned int *indices;
+    int maxParticlesPerDrawCall;
+    
     GLint textureUniformIndex;
 }
 
@@ -30,13 +42,14 @@ typedef struct _ParticleVertex {
 {
     self = [super init];
     if (self) {
-        numParticlesPerDrawCall = 255;
+        numVerticesPerParticle = 4;
+        numIndicesPerParticle = 6;
         
         [self loadShaders];
         
         [self generateGeometry];
         
-        [self generateVertexArray];
+        [self allocateVertexAndIndexArrays];
         
         NSError *error;
         GLKTextureInfo *circleTexture = [GLKTextureLoader textureWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"white_circle" ofType:@"png"] options:@{} error:&error];
@@ -54,125 +67,94 @@ typedef struct _ParticleVertex {
     return self;
 }
 
-- (void)generateVertexArray
+- (void)dealloc
 {
-    glGenVertexArraysOES(1, &vertexArray);
-    glBindVertexArrayOES(vertexArray);
+    free(quadVertices);
+    free(texCoords);
     
-    glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
-    
-    glEnableVertexAttribArray(ATTRIB_POSITION);
-    glEnableVertexAttribArray(ATTRIB_TEXCOORD);
-    glEnableVertexAttribArray(ATTRIB_INSTANCE_INDEX);
-    glVertexAttribPointer(ATTRIB_POSITION, 3, GL_FLOAT, GL_FALSE, sizeof(ParticleVertex), (void *)offsetof(ParticleVertex, position));
-    glVertexAttribPointer(ATTRIB_TEXCOORD, 2, GL_FLOAT, GL_FALSE, sizeof(ParticleVertex), (void *)offsetof(ParticleVertex, texCoord));
-    glVertexAttribPointer(ATTRIB_INSTANCE_INDEX, 1, GL_FLOAT, GL_FALSE, sizeof(ParticleVertex), (void *)offsetof(ParticleVertex, instanceIndex));
-    
-    glBindVertexArrayOES(0);
+    free(vertices);
+    free(indices);
+}
+
+- (void)allocateVertexAndIndexArrays
+{
+    maxParticlesPerDrawCall = 5000;
+    vertices = (ParticleVertex *)malloc(numVerticesPerParticle * maxParticlesPerDrawCall * sizeof(ParticleVertex));
+    indices = (unsigned int *)malloc(numIndicesPerParticle * maxParticlesPerDrawCall * sizeof(unsigned int));
 }
 
 - (void)generateGeometry
 {
-    [self generateVertexBuffer];
-    [self generateIndexBuffer];
-}
+    quadVertices = (GLKVector4 *)malloc(numVerticesPerParticle * sizeof(GLKVector4));
+    quadVertices[0] = GLKVector4Make(-0.5, -0.5, 0, 1);
+    quadVertices[1] = GLKVector4Make(-0.5, 0.5, 0, 1);
+    quadVertices[2] = GLKVector4Make(0.5, -0.5, 0, 1);
+    quadVertices[3] = GLKVector4Make(0.5, 0.5, 0, 1);
 
-- (void)generateIndexBuffer
-{
-    numIndicesPerParticle = 6;
-    int numIndices = numParticlesPerDrawCall * numIndicesPerParticle;
-    unsigned int indices[numIndices];
-    
-    for (int i = 0; i < numParticlesPerDrawCall; i++)
-    {
-        indices[i * 6 + 0] = i * 4 + 0;
-        indices[i * 6 + 1] = i * 4 + 1;
-        indices[i * 6 + 2] = i * 4 + 2;
-        indices[i * 6 + 3] = i * 4 + 3;
-        indices[i * 6 + 4] = i * 4 + 3;
-        indices[i * 6 + 5] = (i + 1) * 4 + 0;
-    }
-    
-    glGenBuffers(1, &indexBuffer);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices * sizeof(unsigned int), indices, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-}
-
-- (void)generateVertexBuffer
-{
-    numVerticesPerParticle = 4;
-    int numVertices = numParticlesPerDrawCall * numVerticesPerParticle;
-    ParticleVertex vertices[numVertices];
-    
-    for (int i = 0; i < numParticlesPerDrawCall; i++)
-    {
-        vertices[i * 4 + 0].position = GLKVector3Make(-0.5, -0.5, 0);
-        vertices[i * 4 + 0].texCoord = GLKVector2Make(0, 0);
-        vertices[i * 4 + 0].instanceIndex = i;
-        
-        vertices[i * 4 + 1].position = GLKVector3Make(-0.5, 0.5, 0);
-        vertices[i * 4 + 1].texCoord = GLKVector2Make(0, 1);
-        vertices[i * 4 + 1].instanceIndex = i;
-        
-        vertices[i * 4 + 2].position = GLKVector3Make(0.5, -0.5, 0);
-        vertices[i * 4 + 2].texCoord = GLKVector2Make(1, 0);
-        vertices[i * 4 + 2].instanceIndex = i;
-        
-        vertices[i * 4 + 3].position = GLKVector3Make(0.5, 0.5, 0);
-        vertices[i * 4 + 3].texCoord = GLKVector2Make(1, 1);
-        vertices[i * 4 + 3].instanceIndex = i;
-    }
-    
-    glGenBuffers(1, &vertexBuffer);
-    glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
-    glBufferData(GL_ARRAY_BUFFER, numVertices * sizeof(ParticleVertex), vertices, GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    texCoords = (GLKVector2 *)malloc(numVerticesPerParticle * sizeof(GLKVector2));
+    texCoords[0] = GLKVector2Make(0, 0);
+    texCoords[1] = GLKVector2Make(0, 1);
+    texCoords[2] = GLKVector2Make(1, 0);
+    texCoords[3] = GLKVector2Make(1, 1);
 }
 
 - (void)drawParticles:(NSArray *)particles
 {
-    glBindVertexArrayOES(vertexArray);
-
-    GLKMatrix4 modelViewMatrices[numParticlesPerDrawCall];
-    GLKVector4 colors[numParticlesPerDrawCall];
+    int numParticles = [particles count];
     
     int i = 0;
     for (id<IPParticle> particle in particles)
     {
         GLKVector3 position = particle.position;
         GLKMatrix4 modelViewMatrix = GLKMatrix4MakeTranslation(position.x, position.y, 0);
+#warning we only rotate around the z axis for now.
         modelViewMatrix = GLKMatrix4Rotate(modelViewMatrix, particle.angles.z, 0, 0, 1);
         GLKVector3 scales = particle.scales;
         modelViewMatrix = GLKMatrix4Scale(modelViewMatrix, scales.x, scales.y, scales.z);
-        modelViewMatrices[i] = modelViewMatrix;
         
-        colors[i] = particle.color;
+        for (int j = 0; j < numVerticesPerParticle; j++)
+        {
+            vertices[i * numVerticesPerParticle + j].position = GLKMatrix4MultiplyVector4(modelViewMatrix, quadVertices[j]);
+            vertices[i * numVerticesPerParticle + j].color = particle.color;
+            vertices[i * numVerticesPerParticle + j].texCoord = texCoords[j];
+        }
+        
+        indices[i * numIndicesPerParticle + 0] = i * 4 + 0;
+        indices[i * numIndicesPerParticle + 1] = i * 4 + 1;
+        indices[i * numIndicesPerParticle + 2] = i * 4 + 2;
+        indices[i * numIndicesPerParticle + 3] = i * 4 + 3;
+        indices[i * numIndicesPerParticle + 4] = i * 4 + 3;
+        indices[i * numIndicesPerParticle + 5] = (i + 1) * 4;
         
         ++i;
-    
-        if (i == numParticlesPerDrawCall)
+        
+        if (i == maxParticlesPerDrawCall)
         {
-            [self drawNumParticles:i withModelViewMatrices:modelViewMatrices andColors:colors];
+            [self drawNumParticles:i];
             i = 0;
         }
     }
+    // draw the leftovers
     if (i > 0)
     {
-        // Draw the leftovers
-        [self drawNumParticles:i withModelViewMatrices:modelViewMatrices andColors:colors];
+        [self drawNumParticles:i];
     }
-
-    glBindVertexArrayOES(0);
 }
 
-- (void)drawNumParticles:(int)numParticles withModelViewMatrices:(GLKMatrix4 *)modelViewMatrices andColors:(GLKVector4 *)colors
+- (void)drawNumParticles:(unsigned int)numParticles
 {
-    glUniformMatrix4fv(uniforms[UNIFORM_MODELVIEW_MATRIX], numParticles, 0, (const GLfloat *)modelViewMatrices);
-    glUniform4fv(uniforms[UNIFORM_COLOR_ARRAY], numParticles, (const GLfloat *)colors);
+    glEnableVertexAttribArray(ATTRIB_POSITION);
+    glEnableVertexAttribArray(ATTRIB_COLOR);
+    glEnableVertexAttribArray(ATTRIB_TEXCOORD);
+    glVertexAttribPointer(ATTRIB_POSITION, 4, GL_FLOAT, GL_FALSE, sizeof(ParticleVertex), &vertices[0].position);
+    glVertexAttribPointer(ATTRIB_COLOR, 4, GL_FLOAT, GL_FALSE, sizeof(ParticleVertex), &vertices[0].color);
+    glVertexAttribPointer(ATTRIB_TEXCOORD, 2, GL_FLOAT, GL_FALSE, sizeof(ParticleVertex), &vertices[0].texCoord);
     
-    glDrawElements(GL_TRIANGLE_STRIP, numParticles * numIndicesPerParticle, GL_UNSIGNED_INT, (void *)0);
+    glDrawElements(GL_TRIANGLE_STRIP, numParticles * numIndicesPerParticle, GL_UNSIGNED_INT, &indices[0]);
+    
+    glDisableVertexAttribArray(ATTRIB_POSITION);
+    glDisableVertexAttribArray(ATTRIB_COLOR);
+    glDisableVertexAttribArray(ATTRIB_TEXCOORD);
 }
 
 #pragma mark -  OpenGL ES 2 shader compilation
@@ -208,8 +190,8 @@ typedef struct _ParticleVertex {
     // Bind attribute locations.
     // This needs to be done prior to linking.
     glBindAttribLocation(_program, ATTRIB_POSITION, "position");
+    glBindAttribLocation(_program, ATTRIB_COLOR, "color");
     glBindAttribLocation(_program, ATTRIB_TEXCOORD, "texCoord");
-    glBindAttribLocation(_program, ATTRIB_INSTANCE_INDEX, "instanceIndex");
     
     // Link program.
     if (![self linkProgram:_program]) {
@@ -234,7 +216,6 @@ typedef struct _ParticleVertex {
     // Get uniform locations.
     uniforms[UNIFORM_MODELVIEW_MATRIX] = glGetUniformLocation(_program, "modelViewMatrix");
     uniforms[UNIFORM_PROJECTION_MATRIX] = glGetUniformLocation(_program, "projectionMatrix");
-    uniforms[UNIFORM_COLOR_ARRAY] = glGetUniformLocation(_program, "colors");
     
     // Release vertex and fragment shaders.
     if (vertShader) {
