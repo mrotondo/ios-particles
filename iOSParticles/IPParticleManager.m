@@ -32,7 +32,7 @@ typedef struct _ParticleVertex {
     GLKVector2 *texCoords;
     
     ParticleVertex *vertices;
-    unsigned int *indices;
+    GLuint indexBuffer;
     int maxParticlesPerDrawCall;
     
     GLint textureUniformIndex;
@@ -49,7 +49,9 @@ typedef struct _ParticleVertex {
         
         [self generateGeometry];
         
-        [self allocateVertexAndIndexArrays];
+        [self allocateVertices];
+        
+        [self generateIndexBuffer];
         
         NSError *error;
         GLKTextureInfo *circleTexture = [GLKTextureLoader textureWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"white_circle" ofType:@"png"] options:@{} error:&error];
@@ -73,15 +75,36 @@ typedef struct _ParticleVertex {
     free(texCoords);
     
     free(vertices);
-    free(indices);
 }
 
-- (void)allocateVertexAndIndexArrays
+- (void)allocateVertices
 {
     maxParticlesPerDrawCall = 5000;
     vertices = (ParticleVertex *)malloc(numVerticesPerParticle * maxParticlesPerDrawCall * sizeof(ParticleVertex));
-    indices = (unsigned int *)malloc(numIndicesPerParticle * maxParticlesPerDrawCall * sizeof(unsigned int));
 }
+
+- (void)generateIndexBuffer
+{
+    numIndicesPerParticle = 6;
+    int numIndices = maxParticlesPerDrawCall * numIndicesPerParticle;
+    unsigned int indices[numIndices];
+    
+    for (int i = 0; i < maxParticlesPerDrawCall; i++)
+    {
+        indices[i * 6 + 0] = i * 4 + 0;
+        indices[i * 6 + 1] = i * 4 + 1;
+        indices[i * 6 + 2] = i * 4 + 2;
+        indices[i * 6 + 3] = i * 4 + 3;
+        indices[i * 6 + 4] = i * 4 + 3;
+        indices[i * 6 + 5] = (i + 1) * 4 + 0;
+    }
+    
+    glGenBuffers(1, &indexBuffer);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices * sizeof(unsigned int), indices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+}
+
 
 - (void)generateGeometry
 {
@@ -100,7 +123,7 @@ typedef struct _ParticleVertex {
 
 - (void)drawParticles:(NSArray *)particles
 {
-    int numParticles = [particles count];
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
     
     int i = 0;
     for (id<IPParticle> particle in particles)
@@ -119,13 +142,6 @@ typedef struct _ParticleVertex {
             vertices[i * numVerticesPerParticle + j].texCoord = texCoords[j];
         }
         
-        indices[i * numIndicesPerParticle + 0] = i * 4 + 0;
-        indices[i * numIndicesPerParticle + 1] = i * 4 + 1;
-        indices[i * numIndicesPerParticle + 2] = i * 4 + 2;
-        indices[i * numIndicesPerParticle + 3] = i * 4 + 3;
-        indices[i * numIndicesPerParticle + 4] = i * 4 + 3;
-        indices[i * numIndicesPerParticle + 5] = (i + 1) * 4;
-        
         ++i;
         
         if (i == maxParticlesPerDrawCall)
@@ -139,6 +155,8 @@ typedef struct _ParticleVertex {
     {
         [self drawNumParticles:i];
     }
+    
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
 - (void)drawNumParticles:(unsigned int)numParticles
@@ -150,7 +168,7 @@ typedef struct _ParticleVertex {
     glVertexAttribPointer(ATTRIB_COLOR, 4, GL_FLOAT, GL_FALSE, sizeof(ParticleVertex), &vertices[0].color);
     glVertexAttribPointer(ATTRIB_TEXCOORD, 2, GL_FLOAT, GL_FALSE, sizeof(ParticleVertex), &vertices[0].texCoord);
     
-    glDrawElements(GL_TRIANGLE_STRIP, numParticles * numIndicesPerParticle, GL_UNSIGNED_INT, &indices[0]);
+    glDrawElements(GL_TRIANGLE_STRIP, numParticles * numIndicesPerParticle, GL_UNSIGNED_INT, (void *)0);
     
     glDisableVertexAttribArray(ATTRIB_POSITION);
     glDisableVertexAttribArray(ATTRIB_COLOR);

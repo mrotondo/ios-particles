@@ -50,12 +50,12 @@
     
     [self setupGL];
 
-    int numParticles = 50000;
+    int numParticles = 10000;
     _particleManager = [[IPParticleManager alloc] init];
     _program = _particleManager.program;
     _particles = [self generateParticles:numParticles];
     
-    self.preferredFramesPerSecond = 60;
+    self.preferredFramesPerSecond = 30;
 }
 
 - (void)viewDidUnload
