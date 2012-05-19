@@ -50,7 +50,7 @@
     
     [self setupGL];
 
-    int numParticles = 1000;
+    int numParticles = 50000;
     _particleManager = [[IPParticleManager alloc] init];
     _program = _particleManager.program;
     _particles = [self generateParticles:numParticles];
@@ -111,8 +111,8 @@
         particle.position = GLKVector3Make((arc4random() / (float)0x100000000),
                                            (arc4random() / (float)0x100000000),
                                            0);
-        particle.scales = GLKVector3Make(0.1 * (arc4random() / (float)0x100000000),
-                                         0.1 * (arc4random() / (float)0x100000000),
+        particle.scales = GLKVector3Make(0.01 * (arc4random() / (float)0x100000000),
+                                         0.01 * (arc4random() / (float)0x100000000),
                                          0);
         particle.angles = GLKVector3Make(0,
                                          0,
